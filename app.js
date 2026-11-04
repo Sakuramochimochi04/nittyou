@@ -67,7 +67,9 @@ async function rpc(fn, params){
   const h = {'Content-Type':'application/json', apikey: CFG.supabaseKey};
   if (CFG.supabaseKey.startsWith('eyJ')) h.Authorization = 'Bearer ' + CFG.supabaseKey;
   let r;
-  try { r = await fetch(`${CFG.supabaseUrl.replace(/\/$/,'')}/rest/v1/rpc/${fn}`, {method:'POST', headers:h, body:JSON.stringify(params)}); }
+  // 「https://xxx.supabase.co/rest/v1/」のように後ろまで貼られていても動くように整える
+  const base = CFG.supabaseUrl.trim().replace(/\/+$/,'').replace(/\/rest\/v1$/,'').replace(/\/+$/,'');
+  try { r = await fetch(`${base}/rest/v1/rpc/${fn}`, {method:'POST', headers:h, body:JSON.stringify(params)}); }
   catch(e){ const er = new Error('network'); er.kind='net'; throw er; }
   const txt = await r.text();
   if (!r.ok){ const er = new Error(txt || ('HTTP '+r.status)); er.kind='server'; throw er; }
@@ -222,7 +224,7 @@ function renderForm(isEdit){
   const F = S.form, [Y,M] = F.ym;
   const first = new Date(Y,M,1).getDay(), days = new Date(Y,M+1,0).getDate();
   const today = new Date(); today.setHours(0,0,0,0);
-  let cal = WD.map((w,i)=>`<span class="wd ${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('');
+  let cal = WD.map((w,i)=>`<button type="button" class="wd ${i===0?'sun':i===6?'sat':''}" data-act="cal-wd" data-w="${i}" aria-label="${M+1}月の${w}曜日をまとめて選ぶ">${w}</button>`).join('');
   for (let i=0;i<first;i++) cal += `<span></span>`;
   for (let d=1; d<=days; d++){
     const iso = `${Y}-${pad(M+1)}-${pad(d)}`, wd = new Date(Y,M,d).getDay();
@@ -238,9 +240,9 @@ function renderForm(isEdit){
     </div>
     <div class="panel">
       <div class="cal-head"><button type="button" class="btn sm" data-act="month" data-d="-1" aria-label="前の月">‹</button><b>${Y}年 ${M+1}月</b><button type="button" class="btn sm" data-act="month" data-d="1" aria-label="次の月">›</button></div>
-      <p class="hint">候補日をタップして選びます（もう一度タップで解除）</p>
-      <div class="cal">${cal}</div>
-      <div class="chips">${F.dates.length ? F.dates.map(d=>`<span class="chip">${dLabel(d)}</span>`).join('') : '<span class="hint">まだ日付が選ばれていません</span>'}</div>
+      <p class="hint">日付をタップ、または指でなぞってまとめて選べます（選んだ日からなぞると解除）。曜日の文字をタップすると、その月のその曜日をまとめて選べます。</p>
+      <div class="cal" id="cal">${cal}</div>
+      <div class="chips" id="cal-chips">${F.dates.length ? F.dates.map(d=>`<span class="chip">${dLabel(d)}</span>`).join('') : '<span class="hint">まだ日付が選ばれていません</span>'}</div>
     </div>
     <div class="panel">
       <h2>入力してもらう時間帯</h2>
@@ -328,6 +330,36 @@ function rangesOf(dayMarks, ev){
 }
 const heatBg = r => r<=0 ? 'var(--bg)' : `color-mix(in srgb, var(--hot) ${Math.round(14 + r*76)}%, var(--surface))`;
 
+/* ---------- 日付ごとの表（メンバー × 時間） ---------- */
+function renderTimeline(ev, slots){
+  const N = S.answers.length;
+  let h = `<div class="legend"><span><span class="tl-key o">◎</span> 行ける</span><span><span class="tl-key t">△</span> たぶん</span><span><span class="tl-key x">×</span> 無理</span><span><span class="tl-key"></span> 未入力</span></div>`;
+  if (!N) return h + `<p class="muted small">まだ誰も入力していません。</p>`;
+  const perHour = 60 / ev.step;
+  for (const d of ev.dates){
+    // 時刻の目盛り：枠の境目（左端）に書く。毎時ちょうどのみ。
+    let head = '';
+    for (const t of slots){ const onHour = t % 60 === 0; head += `<th class="tl-h ${onHour?'hr':''}">${onHour ? `<span>${Math.floor(t/60)}</span>` : ''}</th>`; }
+    const endLabel = ev.endMin % 60 === 0 ? `<span class="end">${ev.endMin/60}</span>` : '';
+    let rows = '';
+    for (const a of S.answers){
+      rows += `<tr><th class="tl-name" scope="row">${esc(a.name)}</th>`;
+      for (const t of slots){ const m = a.marks?.[d]?.[key(t)] || '';
+        rows += `<td class="tl-c ${m} ${t%60===0?'hr':''}" title="${esc(a.name)} ${hm(t)}〜${hm(t+ev.step)} ${m?LABEL[m]:'未入力'}">${m?SYM[m]:''}</td>`; }
+      rows += `</tr>`;
+    }
+    // いちばん下に ◎ の人数
+    let sum = `<tr class="tl-sum"><th class="tl-name" scope="row">◎の人数</th>`;
+    for (const t of slots){ const c = counts(d,t); sum += `<td class="tl-c ${t%60===0?'hr':''} ${c.o===N?'all':''}">${c.o||''}</td>`; }
+    sum += `</tr>`;
+    const notes = S.answers.filter(a => a.notes?.[d]).map(a => `<div class="note"><b>${esc(a.name)}</b>：${esc(a.notes[d])}</div>`).join('');
+    h += `<section class="tl-day"><h2>${dLabel(d)}</h2>
+      <div class="gridbox"><table class="tl" style="--cw:${perHour===1?34:22}px"><thead><tr><th class="tl-name"></th>${head}<th class="tl-endh">${endLabel}</th></tr></thead><tbody>${rows}${sum}</tbody></table></div>
+      ${notes ? `<div class="stack" style="gap:2px">${notes}</div>` : ''}</section>`;
+  }
+  return h + `<p class="hint">表が横に長いときは、表の中を左右にスクロールできます。</p>`;
+}
+
 /* ---------- 調整のページ（一覧） ---------- */
 function renderEvent(){
   const ev = S.ev, N = S.answers.length, slots = slotsOf(ev);
@@ -353,7 +385,7 @@ function renderEvent(){
     }
   }
 
-  h += `<div class="tabs" role="tablist"><button role="tab" data-act="tab" data-v="heat" aria-selected="${S.tab==='heat'}">時間ごとの重なり</button><button role="tab" data-act="tab" data-v="list" aria-selected="${S.tab==='list'}">メンバー別の一覧</button></div>`;
+  h += `<div class="tabs" role="tablist"><button role="tab" data-act="tab" data-v="heat" aria-selected="${S.tab==='heat'}">重なり</button><button role="tab" data-act="tab" data-v="line" aria-selected="${S.tab==='line'}">日付ごとの表</button><button role="tab" data-act="tab" data-v="list" aria-selected="${S.tab==='list'}">メンバー別</button></div>`;
 
   if (S.tab === 'heat'){
     h += `<div class="legend"><span>◎の人数</span><span class="ramp">${[0,.25,.5,.75,1].map(r=>`<i style="background:${heatBg(r)}"></i>`).join('')}</span><span>少 → 多</span><span>黒枠＝全員◎</span></div>`;
@@ -374,6 +406,8 @@ function renderEvent(){
         <span class="k" style="color:var(--batsu)">×</span><span>${g.x.map(esc).join('、')||'—'}</span>
         <span class="k muted">未</span><span class="muted">${g.n.map(esc).join('、')||'—'}</span></div></section>`;
     } else if (N) h += `<p class="hint">マスをタップすると、その時間に誰が行けるか表示されます。</p>`;
+  } else if (S.tab === 'line'){
+    h += renderTimeline(ev, slots);
   } else {
     h += `<section class="panel">`;
     if (!N) h += `<p class="muted small">まだ誰も入力していません。</p>`;
@@ -602,7 +636,15 @@ document.addEventListener('click', async e => {
     // トップ
     case 'forget-ev': LS.set('chosei.events', myEvents().filter(x=>x.id!==b.dataset.id)); renderHome(); break;
     // 作成フォーム
-    case 'cal': { syncForm(); const iso=b.dataset.iso, F=S.form; F.dates = F.dates.includes(iso) ? F.dates.filter(x=>x!==iso) : [...F.dates, iso].sort(); keepScroll(()=>renderForm(route().v==='edit')); break; }
+    case 'cal': { if (e.detail !== 0) break; /* マウス・指は下のドラッグ処理で扱う。ここはキーボード操作用 */
+      syncForm(); const iso=b.dataset.iso, F=S.form; F.dates = F.dates.includes(iso) ? F.dates.filter(x=>x!==iso) : [...F.dates, iso].sort(); keepScroll(()=>renderForm(route().v==='edit')); document.querySelector(`[data-iso="${iso}"]`)?.focus(); break; }
+    case 'cal-wd': {
+      syncForm(); const F=S.form, [Y,M]=F.ym, w=+b.dataset.w, days=new Date(Y,M+1,0).getDate();
+      const today=new Date(); today.setHours(0,0,0,0);
+      const list=[]; for(let d=1; d<=days; d++){ const dt=new Date(Y,M,d); if(dt.getDay()===w && dt>=today) list.push(`${Y}-${pad(M+1)}-${pad(d)}`); }
+      const allOn = list.length && list.every(x=>F.dates.includes(x));
+      F.dates = allOn ? F.dates.filter(x=>!list.includes(x)) : [...new Set([...F.dates, ...list])].sort();
+      keepScroll(()=>renderForm(route().v==='edit')); break; }
     case 'month': { syncForm(); let [y,m] = S.form.ym; m += +b.dataset.d; if(m<0){m=11;y--;} if(m>11){m=0;y++;} S.form.ym=[y,m]; keepScroll(()=>renderForm(route().v==='edit')); break; }
     case 'step': syncForm(); S.form.step = +b.dataset.v; if (S.form.step===60 && (S.form.endMin-S.form.startMin)%60) S.form.endMin += 30; keepScroll(()=>renderForm(route().v==='edit')); break;
     case 'del-event': syncForm(); S.pendingDel='event'; keepScroll(()=>renderForm(true)); break;
@@ -689,5 +731,43 @@ document.addEventListener('click', async e => {
     case 'pr-pat-del-yes': { const P = presets(); P.patterns.splice(+b.dataset.i,1); savePresets(P); S.pendingDel=null; keepScroll(renderPresets); break; }
   }
 });
+/* ---------- カレンダーをなぞって選ぶ ---------- */
+// 押した日が未選択なら「選ぶ」、選択済みなら「外す」。押した日から今指がある日までの連続した日に適用する。
+let calDrag = null;
+const calBtnAt = (x,y) => { const el = document.elementFromPoint(x,y); return el && el.closest ? el.closest('#cal button[data-iso]') : null; };
+function calPaint(toIso){
+  const F = S.form, D = calDrag;
+  const a = D.anchor < toIso ? D.anchor : toIso, z = D.anchor < toIso ? toIso : D.anchor;
+  const set = new Set(D.base);
+  document.querySelectorAll('#cal button[data-iso]').forEach(btn => {
+    const iso = btn.dataset.iso;
+    if (iso >= a && iso <= z){ if (D.add) set.add(iso); else set.delete(iso); }
+  });
+  F.dates = [...set].sort();
+  document.querySelectorAll('#cal button[data-iso]').forEach(btn => btn.setAttribute('aria-pressed', String(set.has(btn.dataset.iso))));
+}
+function calChips(){
+  const el = document.getElementById('cal-chips'); if (!el) return;
+  el.innerHTML = S.form.dates.length ? S.form.dates.map(d=>`<span class="chip">${dLabel(d)}</span>`).join('') : '<span class="hint">まだ日付が選ばれていません</span>';
+}
+document.addEventListener('pointerdown', e => {
+  const btn = e.target.closest && e.target.closest('#cal button[data-iso]');
+  if (!btn || !S.form || e.button > 0) return;
+  e.preventDefault();
+  syncForm();
+  const iso = btn.dataset.iso;
+  calDrag = {id:e.pointerId, anchor:iso, add:!S.form.dates.includes(iso), base:[...S.form.dates]};
+  try { btn.releasePointerCapture(e.pointerId); } catch(_){}
+  calPaint(iso);
+});
+document.addEventListener('pointermove', e => {
+  if (!calDrag || e.pointerId !== calDrag.id) return;
+  const btn = calBtnAt(e.clientX, e.clientY);
+  if (btn) calPaint(btn.dataset.iso);
+});
+const calEnd = e => { if (!calDrag || e.pointerId !== calDrag.id) return; calDrag = null; calChips(); };
+document.addEventListener('pointerup', calEnd);
+document.addEventListener('pointercancel', calEnd);
+
 function keepScroll(fn){ const y = window.scrollY; fn(); window.scrollTo(0,y); }
 })();
