@@ -512,7 +512,7 @@
     <div class="hero">
       <h1>ユニット練習の日程調整</h1>
       <p class="muted">候補日を決めて共有すると、メンバーが日付ごとに ◎ △ × で行ける時間を塗れます。</p>
-  
+      <a class="btn primary block" href="#v=new">新しい調整を作る</a>
     </div>`;
     if (list.length) {
       h +=
