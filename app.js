@@ -510,7 +510,7 @@
     const list = myEvents();
     let h = `<div class="stack">
     <div class="hero">
-      <h1>ユニット練習の日程、<br>空いている時間を塗ってそろえる</h1>
+      <h1>ユニット練習の日程調整</h1>
       <p class="muted">候補日を決めて共有すると、メンバーが日付ごとに ◎ △ × で行ける時間を塗れます。</p>
   
     </div>`;
@@ -985,7 +985,7 @@
     let h = `<div class="stack">
     <div><a class="linkbtn" href="${link()}">← ${esc(ev.title)}</a></div>
     <div><div class="eyebrow">${D.isNew ? "予定を入力" : "予定を編集"}</div><h1>${esc(ev.title)}</h1></div>
-    <label class="f">名前<input type="text" id="a-name" maxlength="20" value="${esc(D.name)}" placeholder="例：さくら" autocomplete="nickname"></label>
+    <label class="f">名前<input type="text" id="a-name" maxlength="20" value="${esc(D.name)}" placeholder="例：あやか" autocomplete="nickname"></label>
     ${hasWeekly ? `<button class="btn" data-act="apply-weekly">いつもの予定（曜日）を全日程に反映</button>` : `<p class="hint">授業やバイトの時間は <a class="linkbtn" href="#v=presets" style="padding:0">いつもの予定</a> に登録しておくと、ワンタップで塗れます。</p>`}
     <div class="datebar" role="tablist" aria-label="日付">${ev.dates
       .map((d) => {
