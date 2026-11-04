@@ -1,28 +1,43 @@
 <!doctype html>
 <html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
-<meta name="robots" content="noindex">
-<title>みんなの日程調整</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="#"><span class="brand-mark">日</span><span class="brand-name" id="app-name">みんなの日程調整</span></a>
-    <a class="btn sm" href="#v=presets">いつもの予定</a>
-  </header>
-  <div id="demo-banner" class="banner" hidden>お試しモード：データはこのブラウザの中だけに保存されます（config.js を設定すると本番になります）</div>
-  <main id="app"><p class="muted">読み込み中…</p></main>
-</div>
-<div id="dock"></div>
-<div class="toast" id="toast" hidden></div>
-<script src="config.js"></script>
-<script src="app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
+    <meta name="robots" content="noindex" />
+    <title>らくらく日程調整</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="#"
+          ><span class="brand-mark">日</span
+          ><span class="brand-name" id="app-name">らくらく日程調整</span></a
+        >
+        <a class="btn sm" href="#v=presets">いつもの予定</a>
+      </header>
+      <div id="demo-banner" class="banner" hidden>
+        お試しモード：データはこのブラウザの中だけに保存されます（config.js
+        を設定すると本番になります）
+      </div>
+      <main id="app"><p class="muted">読み込み中…</p></main>
+    </div>
+    <div id="dock"></div>
+    <div class="toast" id="toast" hidden></div>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>
