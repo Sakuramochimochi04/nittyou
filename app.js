@@ -338,7 +338,7 @@
     err: null,
     owner: null,
     session: {},
-    tab: "heat",
+    tab: "line",
     sel: null,
     unlockFor: null,
     ownerOpen: false,
@@ -511,9 +511,8 @@
     let h = `<div class="stack">
     <div class="hero">
       <h1>ユニット練習の日程、<br>空いている時間を塗ってそろえる</h1>
-      <p class="muted">候補日を決めて共有すると、メンバーが日付ごとに ◎ △ × で行ける時間を塗れます。全員の重なりがひと目でわかります。</p>
-      <div class="lock"><span aria-hidden="true">🔒</span><span><b>中身は暗号化して保存。</b>読めるのはリンクを知っているメンバーだけで、運営者にも見えません。</span></div>
-      <a class="btn primary block" href="#v=new">新しい調整を作る</a>
+      <p class="muted">候補日を決めて共有すると、メンバーが日付ごとに ◎ △ × で行ける時間を塗れます。</p>
+  
     </div>`;
     if (list.length) {
       h +=
@@ -766,10 +765,6 @@
     if (cur && cur.m) out.push(cur);
     return out;
   }
-  const heatBg = (r) =>
-    r <= 0
-      ? "var(--bg)"
-      : `color-mix(in srgb, var(--hot) ${Math.round(14 + r * 76)}%, var(--surface))`;
 
   /* ---------- 日付ごとの表（メンバー × 時間） ---------- */
   function renderTimeline(ev, slots) {
@@ -866,43 +861,9 @@
       }
     }
 
-    h += `<div class="tabs" role="tablist"><button role="tab" data-act="tab" data-v="heat" aria-selected="${S.tab === "heat"}">重なり</button><button role="tab" data-act="tab" data-v="line" aria-selected="${S.tab === "line"}">日付ごとの表</button><button role="tab" data-act="tab" data-v="list" aria-selected="${S.tab === "list"}">メンバー別</button></div>`;
+    h += `<div class="tabs" role="tablist"><button role="tab" data-act="tab" data-v="line" aria-selected="${S.tab === "line"}">日付ごとの表</button><button role="tab" data-act="tab" data-v="list" aria-selected="${S.tab === "list"}">メンバー別</button></div>`;
 
-    if (S.tab === "heat") {
-      h += `<div class="legend"><span>◎の人数</span><span class="ramp">${[0, 0.25, 0.5, 0.75, 1].map((r) => `<i style="background:${heatBg(r)}"></i>`).join("")}</span><span>少 → 多</span><span>黒枠＝全員◎</span></div>`;
-      h += `<div class="gridbox"><table class="heat"><thead><tr><th class="t" style="height:auto"></th>${ev.dates
-        .map((d) => {
-          const p = dParts(d);
-          return `<th><span class="d">${p.m}/${p.d}</span>${WD[p.w]}</th>`;
-        })
-        .join("")}</tr></thead><tbody>`;
-      for (const t of slots) {
-        h += `<tr><th class="t"><span>${hm(t)}</span></th>`;
-        for (const d of ev.dates) {
-          const c = counts(d, t),
-            r = N ? (c.o + c.t * 0.4) / N : 0,
-            sel = S.sel && S.sel.d === d && S.sel.t === t;
-          h += `<td><button class="hc ${N && c.o === N ? "full" : ""}" data-act="cell" data-d="${d}" data-t="${t}" aria-pressed="${!!sel}" style="background:${heatBg(r)}" aria-label="${dLabel(d)} ${hm(t)}〜${hm(t + ev.step)} ◎${c.o}人 △${c.t}人">${c.o ? "◎" + c.o : c.t ? "△" + c.t : ""}</button></td>`;
-        }
-        h += `</tr>`;
-      }
-      h += `<tr class="endrow"><th class="t"><span>${hm(ev.endMin)}</span></th>${ev.dates.map(() => "<td></td>").join("")}</tr></tbody></table></div>`;
-      if (S.sel) {
-        const { d, t } = S.sel,
-          k = key(t),
-          g = { o: [], t: [], x: [], n: [] };
-        for (const a of S.answers) {
-          const m = a.marks?.[d]?.[k];
-          (g[m] || g.n).push(a.name);
-        }
-        h += `<section class="panel"><h2>${dLabel(d)} ${hm(t)}〜${hm(t + ev.step)}</h2><div class="detail">
-        <span class="k" style="color:var(--maru)">◎</span><span>${g.o.map(esc).join("、") || "—"}</span>
-        <span class="k" style="color:var(--sankaku)">△</span><span>${g.t.map(esc).join("、") || "—"}</span>
-        <span class="k" style="color:var(--batsu)">×</span><span>${g.x.map(esc).join("、") || "—"}</span>
-        <span class="k muted">未</span><span class="muted">${g.n.map(esc).join("、") || "—"}</span></div></section>`;
-      } else if (N)
-        h += `<p class="hint">マスをタップすると、その時間に誰が行けるか表示されます。</p>`;
-    } else if (S.tab === "line") {
+    if (S.tab !== "list") {
       h += renderTimeline(ev, slots);
     } else {
       h += `<section class="panel">`;
@@ -1404,13 +1365,6 @@
         S.sel = null;
         keepScroll(render);
         break;
-      case "cell": {
-        const d = b.dataset.d,
-          t = +b.dataset.t;
-        S.sel = S.sel && S.sel.d === d && S.sel.t === t ? null : { d, t };
-        keepScroll(render);
-        break;
-      }
       case "open-mine":
         go(link({ v: "answer", a: b.dataset.id }));
         break;
