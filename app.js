@@ -1094,6 +1094,9 @@
     const hasWeekly = Object.values(P.weekly).some((r) => r && r.length);
     const filled = (d) => Object.keys(D.marks[d] || {}).length > 0;
     const lastIdx = slots.length - 1;
+    const di = ev.dates.indexOf(D.cur),
+      prevD = ev.dates[di - 1],
+      nextD = ev.dates[di + 1];
     let hint;
     if (D.mode === "range")
       hint =
@@ -1145,6 +1148,11 @@
         }
       </div>
       <label class="f">この日のメモ <span class="hint">任意</span><input type="text" id="a-note" maxlength="80" value="${esc(D.notes[D.cur] || "")}" placeholder="例：バイトで17時まで。オンラインなら参加可"></label>
+      ${
+        ev.dates.length > 1
+          ? `<div class="daynav">${prevD ? `<button type="button" class="btn" data-act="day-step" data-d="${prevD}" aria-label="前の日（${dLabel(prevD)}）へ">← ${dLabel(prevD)}</button>` : "<span></span>"}<span class="daynav-pos">${di + 1} / ${ev.dates.length}</span>${nextD ? `<button type="button" class="btn primary" data-act="day-step" data-d="${nextD}" aria-label="次の日（${dLabel(nextD)}）へ">${dLabel(nextD)} →</button>` : "<span></span>"}</div>`
+          : ""
+      }
     </div>
     <label class="f">全体のメモ <span class="hint">任意</span><textarea id="a-memo" maxlength="300" placeholder="例：12月後半は帰省するので参加できません">${esc(D.memo)}</textarea></label>
     ${
@@ -1654,6 +1662,23 @@
             .querySelector('.datebar [aria-selected="true"]')
             ?.scrollIntoView({ inline: "center", block: "nearest" }),
         );
+        break;
+      case "day-step":
+        // 下の「前の日・次の日」：切り替えたら、その日の表の頭まで戻す
+        syncDraft();
+        D.cur = b.dataset.d;
+        D.anchor = null;
+        D.pat = false;
+        repaint();
+        requestAnimationFrame(() => {
+          document
+            .querySelector('.datebar [aria-selected="true"]')
+            ?.scrollIntoView({ inline: "center", block: "nearest" });
+          const top =
+            document.querySelector(".datebar")?.getBoundingClientRect().top;
+          if (top != null)
+            window.scrollTo({ top: window.scrollY + top - 12, behavior: "smooth" });
+        });
         break;
       case "mode":
         syncDraft();

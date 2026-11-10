@@ -1154,3 +1154,28 @@ table.tl {
     inset 2px 0 0 var(--ac),
     inset -2px 0 0 var(--ac);
 }
+
+/* 入力画面の下の「前の日・次の日」 */
+.daynav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.daynav > :first-child {
+  justify-self: start;
+}
+.daynav > :last-child {
+  justify-self: end;
+}
+.daynav .btn {
+  font-family: var(--f-num);
+  min-width: 0;
+  white-space: nowrap;
+}
+.daynav-pos {
+  font-family: var(--f-num);
+  font-size: 12px;
+  color: var(--muted);
+}
