@@ -1060,3 +1060,97 @@ table.tl {
 .f > .seg {
   align-self: flex-start;
 }
+
+/* 日程決めリスト（オーナー専用） */
+.pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.pick-bar .hint {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+.pick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--f-num);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--ac-soft);
+  color: var(--ac);
+  border-radius: 999px;
+  padding: 2px 2px 2px 10px;
+  max-width: 100%;
+}
+.pick-chip button {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pick-chip button:hover {
+  background: var(--surface);
+}
+.pick-guide {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+}
+.pick-guide b {
+  color: var(--ac);
+}
+.tl.picking td.tl-c,
+.tl.picking th.tl-h {
+  cursor: pointer;
+}
+/* 選んだ範囲：見出しに帯、両端に縦線、◎の人数の行に色 */
+.tl th.tl-h.pk {
+  background: var(--ac-soft);
+  box-shadow: inset 0 -4px 0 var(--ac);
+}
+.tl td.tl-c.pk-s {
+  box-shadow: inset 2px 0 0 var(--ac);
+}
+.tl td.tl-c.pk-e {
+  box-shadow: inset -2px 0 0 var(--ac);
+}
+.tl td.tl-c.pk-s.pk-e {
+  box-shadow:
+    inset 2px 0 0 var(--ac),
+    inset -2px 0 0 var(--ac);
+}
+.tl tr.tl-sum td.tl-c.pk {
+  background: var(--ac-soft);
+  color: var(--ac);
+  box-shadow: inset 0 -3px 0 var(--ac);
+}
+.tl tr.tl-sum td.tl-c.pk.all {
+  background: var(--maru);
+  color: var(--surface);
+}
+/* 1回目にタップした始点 */
+.tl th.tl-h.pk-a {
+  background: var(--ac-soft);
+  box-shadow: inset 0 -8px 0 var(--ac);
+}
+.tl td.tl-c.pk-a,
+.tl tr.tl-sum td.tl-c.pk-a {
+  box-shadow:
+    inset 2px 0 0 var(--ac),
+    inset -2px 0 0 var(--ac);
+}

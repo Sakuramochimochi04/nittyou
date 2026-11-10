@@ -346,6 +346,7 @@
     form: null,
     draft: null,
     prTab: "weekly",
+    pick: null, // 日程決めリスト（オーナー専用・保存しない）
   };
   function route() {
     const p = new URLSearchParams(location.hash.slice(1));
@@ -401,6 +402,7 @@
         owner: null,
         session: {},
         ownerOpen: false,
+        pick: null,
       });
       try {
         S.key = await importKey(r.k);
@@ -465,9 +467,8 @@
       document.activeElement &&
       /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
     if (silent && (r.v || typing)) return;
-    const y = window.scrollY;
-    render();
-    if (silent) window.scrollTo(0, y);
+    if (silent) keepScroll(render);
+    else render();
   }
 
   /* ---------- 描画の入口 ---------- */
@@ -766,18 +767,137 @@
     return out;
   }
 
+  /* ---------- 日程決めリスト（オーナー専用） ---------- */
+  // S.pick = { on: 選択モード中か, anchor: {d,t}|null, ranges: [{d,s,e}], text, gen }
+  // 範囲は s 以上 e 未満（分）。保存はせず、ページ内だけで持つ。
+  function pickRanges(ev) {
+    const P = S.pick;
+    if (!P) return [];
+    return P.ranges.filter(
+      (r) => ev.dates.includes(r.d) && r.s >= ev.startMin && r.e <= ev.endMin,
+    );
+  }
+  function pickAdd(ev, d, a, z) {
+    const P = S.pick;
+    let r = { d, s: Math.min(a, z), e: Math.max(a, z) + ev.step };
+    // 同じ日で重なる範囲はひとつにまとめる
+    P.ranges = P.ranges.filter((x) => {
+      if (x.d !== d || x.e <= r.s || r.e <= x.s) return true;
+      r = { d, s: Math.min(r.s, x.s), e: Math.max(r.e, x.e) };
+      return false;
+    });
+    P.ranges.push(r);
+    P.ranges.sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : x.s - y.s));
+    P.text = null;
+  }
+  // その人の該当マスが範囲全体を覆っていなければ、時間を添える
+  function pickWhen(hit, r, step) {
+    const runs = [];
+    for (const t of hit) {
+      const last = runs[runs.length - 1];
+      if (last && last.e === t) last.e = t + step;
+      else runs.push({ s: t, e: t + step });
+    }
+    if (runs.length === 1) {
+      const x = runs[0];
+      if (x.s === r.s && x.e === r.e) return "";
+      if (x.s === r.s) return `(〜${hm(x.e)})`;
+      if (x.e === r.e) return `(${hm(x.s)}〜)`;
+      return `(${hm(x.s)}-${hm(x.e)})`;
+    }
+    return (
+      "(" +
+      runs
+        .map((x) => (x.e === r.e ? `${hm(x.s)}〜` : `${hm(x.s)}-${hm(x.e)}`))
+        .join("・") +
+      ")"
+    );
+  }
+  function pickLine(ev, r) {
+    const ts = [];
+    for (let t = r.s; t < r.e; t += ev.step) ts.push(t);
+    let any = false;
+    const T = [],
+      X = [];
+    for (const a of S.answers) {
+      const ms = ts.map((t) => a.marks?.[r.d]?.[key(t)] || "");
+      if (!ms.some(Boolean)) continue; // 範囲内が未入力の人は無視
+      any = true;
+      const cat = ms.includes("x") ? "x" : ms.includes("t") ? "t" : null;
+      if (!cat) continue; // 全部 ◎ の人は書かない
+      const hit = ts.filter((t, i) => ms[i] === cat);
+      (cat === "x" ? X : T).push(a.name + pickWhen(hit, r, ev.step));
+    }
+    const head = `${dLabel(r.d)} ${hm(r.s)}-${hm(r.e)}`;
+    if (!any) return `${head} 入力なし`;
+    if (!T.length && !X.length) return `${head} 全員◎`;
+    const parts = [];
+    if (T.length) parts.push("△" + T.join("、"));
+    if (X.length) parts.push("×" + X.join("、"));
+    return `${head} ${parts.join(" ")}`;
+  }
+  function pickPanel(ev) {
+    if (!S.owner || !S.answers.length) return "";
+    const P = S.pick,
+      on = !!P?.on,
+      rs = pickRanges(ev);
+    const btn = `<button class="btn sm ${on ? "primary" : ""}" data-act="pick-toggle" aria-pressed="${on}">${on ? "選択を終える" : "日程を決める"}</button>`;
+    if (!on && !rs.length)
+      return `<div class="pick-bar">${btn}<span class="hint">時間を選ぶと、メンバーの都合をまとめたリストを作れます（オーナーだけに表示）</span></div>`;
+    const gen = rs.map((r) => pickLine(ev, r)).join("\n");
+    if (P.text == null || P.text === P.gen) P.text = gen;
+    P.gen = gen;
+    let h = `<section class="panel pick"><div class="pick-bar">${btn}${rs.length ? `<button class="linkbtn quiet" data-act="pick-clear">全部クリア</button>` : ""}</div>`;
+    if (on)
+      h += `<p class="hint">下の表で、始まりのマス → 終わりのマスの順にタップすると範囲を選べます。同じ日にいくつでも、ほかの日も選べます。</p>`;
+    if (rs.length) {
+      h += `<div class="pick-chips">${rs
+        .map(
+          (r) =>
+            `<span class="pick-chip">${dLabel(r.d)} ${hm(r.s)}-${hm(r.e)}<button type="button" data-act="pick-del" data-d="${r.d}" data-s="${r.s}" aria-label="${dLabel(r.d)} ${hm(r.s)}-${hm(r.e)} を外す">×</button></span>`,
+        )
+        .join("")}</div>
+      <label class="f">日程リスト（直してからコピーできます）<textarea id="pick-text" rows="${Math.min(14, P.text.split("\n").reduce((n, l) => n + Math.ceil((l.length || 1) / 26), 0))}" spellcheck="false">${esc(P.text)}</textarea></label>
+      <button class="btn primary sm" data-act="pick-copy" style="align-self:flex-start">リストをコピー</button>`;
+    } else h += `<p class="muted small">まだ範囲を選んでいません。</p>`;
+    return h + `</section>`;
+  }
+  function pickDock() {
+    const P = S.pick;
+    if (!S.owner || !P?.on || !S.answers.length || S.tab === "list") return;
+    const A = P.anchor;
+    dock.innerHTML = `<div class="dock"><div class="dock-in"><p class="pick-guide" role="status">${A ? `<b>${dLabel(A.d)} ${hm(A.t)}〜</b> から終わりをタップ` : "始まりのマスをタップ"}</p><button class="btn sm" data-act="pick-end" style="flex:none">やめる</button></div></div>`;
+  }
+
   /* ---------- 日付ごとの表（メンバー × 時間） ---------- */
   function renderTimeline(ev, slots) {
     const N = S.answers.length;
     let h = `<div class="legend"><span><span class="tl-key o">◎</span> 行ける</span><span><span class="tl-key t">△</span> たぶん</span><span><span class="tl-key x">×</span> 無理</span><span><span class="tl-key"></span> 未入力</span></div>`;
     if (!N) return h + `<p class="muted small">まだ誰も入力していません。</p>`;
     const perHour = 60 / ev.step;
+    const picking = !!(S.owner && S.pick?.on);
+    const PR = S.owner ? pickRanges(ev) : [];
+    const A = picking ? S.pick.anchor : null;
+    // その列の選択状態に応じたクラスと、タップ用の属性
+    const pk = (d, t) => {
+      let c = "";
+      const r = PR.find((x) => x.d === d && t >= x.s && t < x.e);
+      if (r)
+        c +=
+          " pk" + (t === r.s ? " pk-s" : "") + (t + ev.step === r.e ? " pk-e" : "");
+      if (A && A.d === d && A.t === t) c += " pk-a";
+      return c;
+    };
+    const tap = (d, t) =>
+      picking
+        ? ` data-act="pick" data-d="${d}" data-t="${t}"`
+        : "";
     for (const d of ev.dates) {
       // 時刻の目盛り：枠の境目（左端）に書く。毎時ちょうどのみ。
       let head = "";
       for (const t of slots) {
         const onHour = t % 60 === 0;
-        head += `<th class="tl-h ${onHour ? "hr" : ""}">${onHour ? `<span>${Math.floor(t / 60)}</span>` : ""}</th>`;
+        head += `<th class="tl-h ${onHour ? "hr" : ""}${pk(d, t)}"${tap(d, t)}>${onHour ? `<span>${Math.floor(t / 60)}</span>` : ""}</th>`;
       }
       const endLabel =
         ev.endMin % 60 === 0
@@ -788,7 +908,7 @@
         rows += `<tr><th class="tl-name" scope="row">${esc(a.name)}</th>`;
         for (const t of slots) {
           const m = a.marks?.[d]?.[key(t)] || "";
-          rows += `<td class="tl-c ${m} ${t % 60 === 0 ? "hr" : ""}" title="${esc(a.name)} ${hm(t)}〜${hm(t + ev.step)} ${m ? LABEL[m] : "未入力"}">${m ? SYM[m] : ""}</td>`;
+          rows += `<td class="tl-c ${m} ${t % 60 === 0 ? "hr" : ""}${pk(d, t)}"${tap(d, t)} title="${esc(a.name)} ${hm(t)}〜${hm(t + ev.step)} ${m ? LABEL[m] : "未入力"}">${m ? SYM[m] : ""}</td>`;
         }
         rows += `</tr>`;
       }
@@ -796,7 +916,7 @@
       let sum = `<tr class="tl-sum"><th class="tl-name" scope="row">◎の人数</th>`;
       for (const t of slots) {
         const c = counts(d, t);
-        sum += `<td class="tl-c ${t % 60 === 0 ? "hr" : ""} ${c.o === N ? "all" : ""}">${c.o || ""}</td>`;
+        sum += `<td class="tl-c ${t % 60 === 0 ? "hr" : ""} ${c.o === N ? "all" : ""}${pk(d, t)}"${tap(d, t)}>${c.o || ""}</td>`;
       }
       sum += `</tr>`;
       const notes = S.answers
@@ -807,7 +927,7 @@
         )
         .join("");
       h += `<section class="tl-day"><h2>${dLabel(d)}</h2>
-      <div class="gridbox"><table class="tl" style="--cw:${perHour === 1 ? 34 : 22}px"><thead><tr><th class="tl-name"></th>${head}<th class="tl-endh">${endLabel}</th></tr></thead><tbody>${rows}${sum}</tbody></table></div>
+      <div class="gridbox" data-k="${d}"><table class="tl${picking ? " picking" : ""}" style="--cw:${perHour === 1 ? 34 : 22}px"><thead><tr><th class="tl-name"></th>${head}<th class="tl-endh">${endLabel}</th></tr></thead><tbody>${rows}${sum}</tbody></table></div>
       ${notes ? `<div class="stack" style="gap:2px">${notes}</div>` : ""}</section>`;
     }
     return (
@@ -864,6 +984,7 @@
     h += `<div class="tabs" role="tablist"><button role="tab" data-act="tab" data-v="line" aria-selected="${S.tab === "line"}">日付ごとの表</button><button role="tab" data-act="tab" data-v="list" aria-selected="${S.tab === "list"}">メンバー別</button></div>`;
 
     if (S.tab !== "list") {
+      h += pickPanel(ev);
       h += renderTimeline(ev, slots);
     } else {
       h += `<section class="panel">`;
@@ -909,6 +1030,7 @@
     if (S.err === "net")
       h += `<p class="status err">最新の状態を読み込めませんでした。表示が古い可能性があります。</p>`;
     app.innerHTML = h + `</div>`;
+    pickDock();
   }
 
   /* ---------- 入力画面 ---------- */
@@ -1220,6 +1342,7 @@
   /* ---------- 操作 ---------- */
   app.addEventListener("input", (e) => {
     const el = e.target;
+    if (el.id === "pick-text" && S.pick) S.pick.text = el.value;
     if (el.dataset.pr) {
       const P = presets(),
         parts = el.dataset.pr.split(".");
@@ -1365,6 +1488,57 @@
         S.sel = null;
         keepScroll(render);
         break;
+      // 日程決めリスト
+      case "pick-toggle":
+        if (!S.owner) break;
+        if (!S.pick)
+          S.pick = { on: true, anchor: null, ranges: [], text: null, gen: "" };
+        else S.pick.on = !S.pick.on;
+        S.pick.anchor = null;
+        keepScroll(render);
+        break;
+      case "pick-end":
+        if (S.pick) {
+          S.pick.on = false;
+          S.pick.anchor = null;
+        }
+        keepScroll(render);
+        break;
+      case "pick": {
+        const P = S.pick;
+        if (!S.owner || !P?.on) break;
+        const d = b.dataset.d,
+          t = +b.dataset.t;
+        if (!P.anchor || P.anchor.d !== d) P.anchor = { d, t };
+        else {
+          pickAdd(S.ev, d, P.anchor.t, t);
+          P.anchor = null;
+        }
+        keepScroll(render);
+        break;
+      }
+      case "pick-del": {
+        const P = S.pick;
+        if (!P) break;
+        P.ranges = P.ranges.filter(
+          (r) => !(r.d === b.dataset.d && r.s === +b.dataset.s),
+        );
+        P.text = null;
+        keepScroll(render);
+        break;
+      }
+      case "pick-clear":
+        if (!S.pick) break;
+        S.pick.ranges = [];
+        S.pick.anchor = null;
+        S.pick.text = null;
+        keepScroll(render);
+        break;
+      case "pick-copy": {
+        const ta = document.getElementById("pick-text");
+        if (ta) copyText(ta.value, ta);
+        break;
+      }
       case "open-mine":
         go(link({ v: "answer", a: b.dataset.id }));
         break;
@@ -1442,6 +1616,7 @@
       }
       case "owner-logout":
         S.owner = null;
+        S.pick = null;
         keepScroll(render);
         break;
       case "owner-del-ans":
@@ -1753,9 +1928,17 @@
   document.addEventListener("pointerup", calEnd);
   document.addEventListener("pointercancel", calEnd);
 
+  // 描き直しても、ページの縦位置と表の横スクロール位置を保つ
   function keepScroll(fn) {
     const y = window.scrollY;
+    const xs = {};
+    document
+      .querySelectorAll(".gridbox[data-k]")
+      .forEach((g) => (xs[g.dataset.k] = g.scrollLeft));
     fn();
+    document.querySelectorAll(".gridbox[data-k]").forEach((g) => {
+      if (xs[g.dataset.k] != null) g.scrollLeft = xs[g.dataset.k];
+    });
     window.scrollTo(0, y);
   }
 })();
